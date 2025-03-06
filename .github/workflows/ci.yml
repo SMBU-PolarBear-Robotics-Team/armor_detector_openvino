@@ -1,0 +1,40 @@
+name: Build and Test
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    container:
+      image: rostooling/setup-ros-docker:ubuntu-jammy-ros-humble-desktop-latest
+    steps:
+      - name: Install Git LFS
+        run: |
+          sudo apt update
+          sudo apt install -y git-lfs
+
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+        with:
+          lfs: true
+
+      - name: Install OpenVINO-2023.3.0
+        run: |
+          wget https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
+          sudo apt-key add GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
+          echo "deb https://apt.repos.intel.com/openvino/2023 ubuntu22 main" | sudo tee /etc/apt/sources.list.d/intel-openvino-2023.list
+          sudo apt update
+          sudo apt install -y openvino-2023.3.0
+
+      - name: Build armor_detector_openvino
+        uses: ros-tooling/action-ros-ci@v0.3
+        with:
+          package-name: armor_detector_openvino
+          target-ros2-distro: humble
+          vcs-repo-file-url: "${{ github.workspace }}/dependencies.repos"
+          skip-tests: true
+
+      - name: Test armor_detector_openvino
+        run: |
+          /usr/bin/bash .github/workflows/colcon_test.sh armor_detector_openvino
