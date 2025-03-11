@@ -24,6 +24,8 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <fstream>
+#include <string>
 
 #include "armor_detector_openvino/types.hpp"
 #include "opencv2/opencv.hpp"
@@ -87,6 +89,10 @@ private:
   bool processCallback(
     const cv::Mat resized_img, Eigen::Matrix3f transform_matrix, int64_t timestamp_nanosec,
     const cv::Mat & src_img);
+  // 数字识别相关函数
+  void initNumberClassifier();
+  void extractNumberImage(const cv::Mat & src, ArmorObject & armor);
+  bool classifyNumber(ArmorObject & armor);
 
 private:
   std::string model_path_;
@@ -101,6 +107,11 @@ private:
 
   std::unique_ptr<ov::Core> ov_core_;
   std::unique_ptr<ov::CompiledModel> compiled_model_;
+
+  // 数字识别相关成员变量
+  cv::dnn::Net number_net_;
+  std::vector<std::string> class_names_;
+  float number_threshold_;
 };
 }  // namespace rm_auto_aim
 
