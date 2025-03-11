@@ -18,14 +18,13 @@
 
 #include <eigen3/Eigen/Dense>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <future>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
-#include <fstream>
-#include <string>
 
 #include "armor_detector_openvino/types.hpp"
 #include "opencv2/opencv.hpp"
