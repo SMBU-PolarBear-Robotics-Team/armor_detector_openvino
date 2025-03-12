@@ -124,6 +124,9 @@ ArmorDetectorOpenvinoNode::ArmorDetectorOpenvinoNode(const rclcpp::NodeOptions &
 
 void ArmorDetectorOpenvinoNode::initDetector()
 {
+  auto pkg_path = ament_index_cpp::get_package_share_directory("armor_detector_openvino");
+  auto classify_model_path = pkg_path + "/model/mlp.onnx";
+  auto classify_label_path = pkg_path + "/model/label.txt";
   auto model_path = this->declare_parameter("detector.model_path", "");
   auto device_type = this->declare_parameter("detector.device_type", "AUTO");
   float conf_threshold = this->declare_parameter("detector.confidence_threshold", 0.25);
@@ -139,7 +142,8 @@ void ArmorDetectorOpenvinoNode::initDetector()
 
   // Create detector
   detector_ = std::make_unique<DetectorOpenVino>(
-    model_path, device_type, conf_threshold, top_k, nms_threshold);
+    model_path, classify_model_path, classify_label_path, device_type, conf_threshold, top_k,
+    nms_threshold);
   // Set detect callback
   detector_->setCallback(std::bind(
     &ArmorDetectorOpenvinoNode::openvinoDetectCallback, this, std::placeholders::_1,

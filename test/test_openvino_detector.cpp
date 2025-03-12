@@ -27,8 +27,11 @@ TEST(DetectorOpenVino, benchmark)
 {
   auto pkg_path = ament_index_cpp::get_package_share_directory("armor_detector_openvino");
   auto model_path = pkg_path + "/model/opt-1208-001.onnx";
+  auto classify_model_path = pkg_path + "/model/mlp.onnx";
+  auto classify_label_path = pkg_path + "/model/label.txt";
 
-  rm_auto_aim::DetectorOpenVino detector(model_path, "AUTO");
+  rm_auto_aim::DetectorOpenVino detector(
+    model_path, classify_model_path, classify_label_path, "AUTO");
 
   detector.init();
 

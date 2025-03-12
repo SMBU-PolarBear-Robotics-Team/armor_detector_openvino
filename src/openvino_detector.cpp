@@ -229,9 +229,12 @@ static void nms_merge_sorted_bboxes(
 }
 
 DetectorOpenVino::DetectorOpenVino(
-  const std::filesystem::path & model_path, const std::string & device_name, float conf_threshold,
+  const std::filesystem::path & model_path, const std::string & classify_model_pathconst,
+  std::string & classify_label_path, const std::string & device_name, float conf_threshold,
   int top_k, float nms_threshold, bool auto_init)
 : model_path_(model_path),
+  classify_model_path_(classify_model_pathconst),
+  classify_label_path_(classify_label_path),
   device_name_(device_name),
   conf_threshold_(conf_threshold),
   top_k_(top_k),
@@ -271,7 +274,7 @@ void DetectorOpenVino::init()
 void DetectorOpenVino::initNumberClassifier()
 {
   // 加载数字识别模型
-  const std::string model_path = "src/pb2025_rm_vision/armor_detector_opencv/model/mlp.onnx";
+  const std::string model_path = classify_model_path_;
   number_net_ = cv::dnn::readNetFromONNX(model_path);
 
   // 检查模型是否成功加载
@@ -283,7 +286,7 @@ void DetectorOpenVino::initNumberClassifier()
   }
 
   // 加载标签
-  const std::string label_path = "src/pb2025_rm_vision/armor_detector_opencv/model/label.txt";
+  const std::string label_path = classify_label_path_;
   std::ifstream label_file(label_path);
   std::string line;
 
