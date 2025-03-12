@@ -403,11 +403,6 @@ bool DetectorOpenVino::classifyNumber(ArmorObject & armor)
   if (label_to_armor_number.find(label_id) != label_to_armor_number.end()) {
     armor.number = label_to_armor_number.at(label_id);
   }
-  // Debug: 输出识别到的内容
-  // std::cout << "Detected number: " << class_names_[label_id] << " with confidence: " << confidence << std::endl;
-  // RCLCPP_INFO(
-  //   rclcpp::get_logger("rm_auto_aim"), "Detected number: %s with confidence: %f",
-  //   class_names_[label_id].c_str(), confidence);
 
   return true;
 }
