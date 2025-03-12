@@ -16,6 +16,7 @@
 #include <algorithm>
 
 #include "armor_detector_openvino/detector_openvino.hpp"
+#include "armor_detector_openvino/detector_openvino_node.hpp"
 
 namespace rm_auto_aim
 {
@@ -228,14 +229,20 @@ static void nms_merge_sorted_bboxes(
 }
 
 DetectorOpenVino::DetectorOpenVino(
-  const std::filesystem::path & model_path, const std::string & device_name, float conf_threshold,
+  const std::filesystem::path & model_path, const std::string & classify_model_pathconst,
+  std::string & classify_label_path, const std::string & device_name, float conf_threshold,
   int top_k, float nms_threshold, bool auto_init)
 : model_path_(model_path),
+  classify_model_path_(classify_model_pathconst),
+  classify_label_path_(classify_label_path),
   device_name_(device_name),
   conf_threshold_(conf_threshold),
   top_k_(top_k),
-  nms_threshold_(nms_threshold)
+  nms_threshold_(nms_threshold),
+  number_threshold_(0.2)  // 默认数字识别阈值
 {
+  // 初始化数字识别模型和标签
+  initNumberClassifier();
   if (auto_init) {
     init();
   }
@@ -261,6 +268,146 @@ void DetectorOpenVino::init()
 
   strides_ = {8, 16, 32};
   generate_grids_and_stride(INPUT_W, INPUT_H, strides_, grid_strides_);
+}
+
+// 初始化数字识别模型和标签
+void DetectorOpenVino::initNumberClassifier()
+{
+  // 加载数字识别模型
+  const std::string model_path = classify_model_path_;
+  number_net_ = cv::dnn::readNetFromONNX(model_path);
+
+  // 检查模型是否成功加载
+  if (number_net_.empty()) {
+    std::cerr << "Failed to load number classifier model from " << model_path << std::endl;
+    std::exit(EXIT_FAILURE);  // 模型加载失败，退出程序
+  } else {
+    std::cout << "Successfully loaded number classifier model from " << model_path << std::endl;
+  }
+
+  // 加载标签
+  const std::string label_path = classify_label_path_;
+  std::ifstream label_file(label_path);
+  std::string line;
+
+  // 清空之前的标签
+  class_names_.clear();
+
+  // 读取标签文件
+  while (std::getline(label_file, line)) {
+    class_names_.push_back(line);
+  }
+
+  // 检查标签是否成功加载
+  if (class_names_.empty()) {
+    std::cerr << "Failed to load labels from " << label_path << std::endl;
+    std::exit(EXIT_FAILURE);  // 标签加载失败，退出程序
+  } else {
+    std::cout << "Successfully loaded " << class_names_.size() << " labels from " << label_path
+              << std::endl;
+  }
+}
+
+// 从装甲板提取数字图像
+void DetectorOpenVino::extractNumberImage(const cv::Mat & src, ArmorObject & armor)
+{
+  // 光条长度和装甲板尺寸参数
+  const int light_length = 12;
+  const int warp_height = 28;
+  const int small_armor_width = 32;
+  const int large_armor_width = 54;
+  const cv::Size roi_size(20, 28);
+
+  // 判断装甲板类型
+  bool is_large = (armor.number == ArmorNumber::NO1 || armor.number == ArmorNumber::BASE);
+
+  // 透视变换
+  cv::Point2f lights_vertices[4] = {armor.pts[0], armor.pts[1], armor.pts[2], armor.pts[3]};
+
+  const int top_light_y = (warp_height - light_length) / 2 - 1;
+  const int bottom_light_y = top_light_y + light_length;
+  const int warp_width = is_large ? large_armor_width : small_armor_width;
+
+  cv::Point2f target_vertices[4] = {
+    cv::Point(0, bottom_light_y),
+    cv::Point(0, top_light_y),
+    cv::Point(warp_width - 1, top_light_y),
+    cv::Point(warp_width - 1, bottom_light_y),
+  };
+
+  cv::Mat number_image;
+  auto rotation_matrix = cv::getPerspectiveTransform(lights_vertices, target_vertices);
+  cv::warpPerspective(src, number_image, rotation_matrix, cv::Size(warp_width, warp_height));
+
+  // 获取ROI
+  number_image = number_image(cv::Rect(cv::Point((warp_width - roi_size.width) / 2, 0), roi_size));
+
+  // 二值化
+  cv::cvtColor(number_image, number_image, cv::COLOR_RGB2GRAY);
+  cv::threshold(number_image, number_image, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+
+  // 上下180度镜像翻转
+  cv::Mat flipped_image;
+  cv::flip(number_image, flipped_image, 0);  // 0表示沿x轴翻转
+
+  // Debug: 显示处理后的图像
+  // cv::imshow("Flipped Number Image", flipped_image);
+  // cv::waitKey(1);  // 1毫秒延迟，允许显示图像
+
+  armor.number_img = flipped_image;
+}
+bool DetectorOpenVino::classifyNumber(ArmorObject & armor)
+{
+  cv::Mat image = armor.number_img.clone();
+
+  // 归一化
+  image = image / 255.0;
+
+  // 创建blob
+  cv::Mat blob;
+  cv::dnn::blobFromImage(image, blob);
+
+  // 设置输入并进行前向传播
+  number_net_.setInput(blob);
+  cv::Mat outputs = number_net_.forward();
+
+  // 进行softmax处理
+  float max_prob = *std::max_element(outputs.begin<float>(), outputs.end<float>());
+  cv::Mat softmax_prob;
+  cv::exp(outputs - max_prob, softmax_prob);
+  float sum = static_cast<float>(cv::sum(softmax_prob)[0]);
+  softmax_prob /= sum;
+
+  // 获取最高概率的类别
+  double confidence;
+  cv::Point class_id_point;
+  cv::minMaxLoc(softmax_prob.reshape(1, 1), nullptr, &confidence, nullptr, &class_id_point);
+  int label_id = class_id_point.x;
+
+  // 记录分类置信度
+  armor.confidence = confidence;
+
+  // 创建从label.txt索引到ArmorNumber枚举的映射
+  // label.txt: 1,2,3,4,5,outpost,guard,base,negative
+  // ArmorNumber: SENTRY=0,NO1,NO2,NO3,NO4,NO5,OUTPOST,BASE
+  static const std::map<int, ArmorNumber> label_to_armor_number = {
+    {0, ArmorNumber::NO1},      // "1" -> NO1
+    {1, ArmorNumber::NO2},      // "2" -> NO2
+    {2, ArmorNumber::NO3},      // "3" -> NO3
+    {3, ArmorNumber::NO4},      // "4" -> NO4
+    {4, ArmorNumber::NO5},      // "5" -> NO5
+    {5, ArmorNumber::OUTPOST},  // "outpost" -> OUTPOST
+    {6, ArmorNumber::SENTRY},   // "guard" -> SENTRY
+    {7, ArmorNumber::BASE}      // "base" -> BASE
+    // "negative" (索引8)没有对应的ArmorNumber，如果识别到可以保持原值或设为其他默认值
+  };
+
+  // 使用映射关系更新装甲板数字
+  if (label_to_armor_number.find(label_id) != label_to_armor_number.end()) {
+    armor.number = label_to_armor_number.at(label_id);
+  }
+
+  return true;
 }
 
 std::future<bool> DetectorOpenVino::pushInput(const cv::Mat & rgb_img, int64_t timestamp_nanosec)
@@ -348,6 +495,14 @@ bool DetectorOpenVino::processCallback(
         objs_result[i].pts[j] = pts_final[j];
       }
     }
+  }
+
+  // 添加数字识别逻辑
+  for (auto & armor : objs_result) {
+    // 提取装甲板图像
+    extractNumberImage(src_img, armor);
+    // 对提取的数字图像进行分类
+    classifyNumber(armor);
   }
 
   // NMS & TopK

@@ -18,6 +18,7 @@
 
 #include <eigen3/Eigen/Dense>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <future>
 #include <memory>
@@ -25,6 +26,7 @@
 #include <string>
 #include <vector>
 
+#include "ament_index_cpp/get_package_share_directory.hpp"
 #include "armor_detector_openvino/types.hpp"
 #include "opencv2/opencv.hpp"
 #include "openvino/openvino.hpp"
@@ -57,9 +59,9 @@ public:
    * @param auto_init If initializing detector inplace
    */
   explicit DetectorOpenVino(
-    const std::filesystem::path & model_path, const std::string & device_name,
-    float conf_threshold = 0.25, int top_k = 128, float nms_threshold = 0.3,
-    bool auto_init = false);
+    const std::filesystem::path & model_path, const std::string & classify_model_pathconst,
+    std::string & classify_label_path, const std::string & device_name, float conf_threshold = 0.25,
+    int top_k = 128, float nms_threshold = 0.3, bool auto_init = false);
 
   /**
    * @brief Initialize detector
@@ -87,9 +89,15 @@ private:
   bool processCallback(
     const cv::Mat resized_img, Eigen::Matrix3f transform_matrix, int64_t timestamp_nanosec,
     const cv::Mat & src_img);
+  // 数字识别相关函数
+  void initNumberClassifier();
+  void extractNumberImage(const cv::Mat & src, ArmorObject & armor);
+  bool classifyNumber(ArmorObject & armor);
 
 private:
   std::string model_path_;
+  std::string classify_model_path_;
+  std::string classify_label_path_;
   std::string device_name_;
   float conf_threshold_;
   int top_k_;
@@ -101,6 +109,12 @@ private:
 
   std::unique_ptr<ov::Core> ov_core_;
   std::unique_ptr<ov::CompiledModel> compiled_model_;
+
+  // 数字识别相关成员变量
+
+  cv::dnn::Net number_net_;
+  std::vector<std::string> class_names_;
+  float number_threshold_;
 };
 }  // namespace rm_auto_aim
 

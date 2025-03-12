@@ -33,6 +33,10 @@ typedef struct
   float prob;
   std::vector<cv::Point2f> pts;
   cv::Rect box;
+
+  // 添加用于数字识别的字段
+  cv::Mat number_img;  // 提取的数字图像
+  double confidence;   // 数字识别的置信度
 } ArmorObject;
 
 constexpr const char * K_ARMOR_NAMES[] = {"guard", "1", "2", "3", "4", "5", "outpost", "base"};
