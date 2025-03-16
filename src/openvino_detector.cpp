@@ -402,12 +402,19 @@ bool DetectorOpenVino::classifyNumber(ArmorObject & armor)
     // "negative" (索引8)没有对应的ArmorNumber，如果识别到可以保持原值或设为其他默认值
   };
 
-  // 使用映射关系更新装甲板数字
-  if (label_to_armor_number.find(label_id) != label_to_armor_number.end()) {
+  // 使用映射关系更新装甲板数字，但只有在识别结果不是"negative"时才更新
+  if (label_id < 8 && label_to_armor_number.find(label_id) != label_to_armor_number.end()) {
     armor.number = label_to_armor_number.at(label_id);
+    std::cout << "Detected number: " << class_names_[label_id] << " with confidence: " << confidence
+              << std::endl;
+    return true;
+  } else {
+    // 如果识别结果为"negative"或其他无法映射的结果，标记这个装甲板为无效
+    std::cout << "Detected negative or invalid result with confidence: " << confidence << std::endl;
+    // 设置一个无效标志，在后续处理中可以过滤掉这个装甲板
+    armor.confidence = 0;  // 将置信度设为0，使其在后续过滤中被剔除
+    return false;
   }
-
-  return true;
 }
 
 std::future<bool> DetectorOpenVino::pushInput(const cv::Mat & rgb_img, int64_t timestamp_nanosec)
