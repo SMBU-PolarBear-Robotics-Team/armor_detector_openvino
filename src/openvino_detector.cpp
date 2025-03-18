@@ -405,8 +405,6 @@ bool DetectorOpenVino::classifyNumber(ArmorObject & armor)
   // 使用映射关系更新装甲板数字，但只有在识别结果不是"negative"时才更新
   if (label_id < 8 && label_to_armor_number.find(label_id) != label_to_armor_number.end()) {
     armor.number = label_to_armor_number.at(label_id);
-    std::cout << "Detected number: " << class_names_[label_id] << " with confidence: " << confidence
-              << std::endl;
     return true;
   } else {
     // 如果识别结果为"negative"或其他无法映射的结果，标记这个装甲板为无效
