@@ -145,9 +145,10 @@ void ArmorDetectorOpenvinoNode::initDetector()
     model_path, classify_model_path, classify_label_path, device_type, conf_threshold, top_k,
     nms_threshold);
   // Set detect callback
-  detector_->setCallback(std::bind(
-    &ArmorDetectorOpenvinoNode::openvinoDetectCallback, this, std::placeholders::_1,
-    std::placeholders::_2, std::placeholders::_3));
+  detector_->setCallback(
+    std::bind(
+      &ArmorDetectorOpenvinoNode::openvinoDetectCallback, this, std::placeholders::_1,
+      std::placeholders::_2, std::placeholders::_3));
   // init detector
   detector_->init();
 }
